@@ -1,0 +1,281 @@
+const express = require("express");
+const router = express.Router();
+const Order = require("../models/Order");
+const PDFDocument = require("pdfkit");
+
+// GET all orders
+router.get("/", async (req, res) => {
+	try {
+		const { period = "all" } = req.query;
+		let dateFilter = {};
+
+		// Build date filter based on period
+		if (period === "today") {
+			const today = new Date();
+			today.setHours(0, 0, 0, 0);
+			const tomorrow = new Date(today);
+			tomorrow.setDate(tomorrow.getDate() + 1);
+			dateFilter = { createdAt: { $gte: today, $lt: tomorrow } };
+		} else if (period === "month") {
+			const now = new Date();
+			const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+			const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+			dateFilter = { createdAt: { $gte: monthStart, $lt: monthEnd } };
+		}
+		// For 'all', no date filter
+
+		const orders = await Order.find(dateFilter)
+			.populate("customer", "name phone email")
+			.populate("items.menuItem", "name type")
+			.sort({ createdAt: -1 });
+		res.json(orders);
+	} catch (err) {
+		res.status(500).json({ message: err.message });
+	}
+});
+
+// GET export orders as PDF by date (must be before /:id route)
+router.get("/export/pdf", async (req, res) => {
+	try {
+		const { date } = req.query;
+		const selectedDate = date ? new Date(date) : new Date();
+
+		// Set date range (00:00:00 to 23:59:59)
+		const startOfDay = new Date(selectedDate);
+		startOfDay.setHours(0, 0, 0, 0);
+		const endOfDay = new Date(selectedDate);
+		endOfDay.setHours(23, 59, 59, 999);
+
+		const orders = await Order.find({
+			orderDate: {
+				$gte: startOfDay,
+				$lte: endOfDay,
+			},
+		})
+			.populate("customer", "name phone address city")
+			.populate("items.menuItem", "name")
+			.sort({ mealType: 1, "customer.name": 1 });
+
+		if (orders.length === 0) {
+			return res.status(404).json({ message: "No orders found for this date" });
+		}
+
+		// Create PDF document
+		const doc = new PDFDocument({ margin: 40 });
+		res.setHeader("Content-Type", "application/pdf");
+		res.setHeader(
+			"Content-Disposition",
+			`attachment; filename="Orders_${selectedDate.toISOString().split("T")[0]}.pdf"`,
+		);
+
+		doc.pipe(res);
+
+		// Title
+		doc
+			.fontSize(20)
+			.font("Helvetica-Bold")
+			.text("Catering Orders Report", { align: "center" });
+		doc
+			.fontSize(10)
+			.font("Helvetica")
+			.text(selectedDate.toDateString(), { align: "center" });
+		doc.moveDown(0.5);
+
+		// Group orders by meal type
+		const mealTypes = {
+			breakfast: "🌅 BREAKFAST",
+			lunch: "☀️ LUNCH",
+			dinner: "🌙 DINNER",
+		};
+		const groupedOrders = {
+			breakfast: [],
+			lunch: [],
+			dinner: [],
+		};
+
+		orders.forEach((order) => {
+			if (groupedOrders[order.mealType]) {
+				groupedOrders[order.mealType].push(order);
+			}
+		});
+
+		let pageNeedsBreak = false;
+
+		// Process each meal type
+		Object.entries(groupedOrders).forEach(([mealType, mealOrders]) => {
+			if (mealOrders.length === 0) return;
+
+			if (pageNeedsBreak) {
+				doc.addPage();
+			}
+
+			// Meal type header
+			doc
+				.fontSize(14)
+				.font("Helvetica-Bold")
+				.fillColor("#ea580c")
+				.text(mealTypes[mealType]);
+			doc
+				.strokeColor("#ea580c")
+				.lineWidth(1)
+				.moveTo(40, doc.y)
+				.lineTo(555, doc.y)
+				.stroke();
+			doc.moveDown(0.3);
+
+			// Summary
+			const totalCount = mealOrders.length;
+			const totalAmount = mealOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+			doc
+				.fontSize(10)
+				.font("Helvetica")
+				.fillColor("#000")
+				.text(
+					`Total Orders: ${totalCount} | Total Amount: ₹${totalAmount.toLocaleString("en-IN")}`,
+				);
+			doc.moveDown(0.5);
+
+			// Table header
+			const tableTop = doc.y;
+			const col1 = 45;
+			const col2 = 180;
+			const col3 = 320;
+			const col4 = 450;
+
+			doc
+				.fontSize(9)
+				.font("Helvetica-Bold")
+				.fillColor("#fff")
+				.rect(40, tableTop, 515, 20)
+				.fill("#ea580c");
+
+			doc
+				.fillColor("#fff")
+				.text("Order #", col1, tableTop + 5)
+				.text("Customer", col2, tableTop + 5)
+				.text("Items", col3, tableTop + 5)
+				.text("Total", col4, tableTop + 5);
+
+			doc.moveDown(1.5);
+
+			// Table rows
+			let rowY = doc.y;
+			mealOrders.forEach((order, idx) => {
+				const itemNames = order.items.map((i) => i.name).join(", ");
+				const isEven = idx % 2 === 0;
+				const bgColor = isEven ? "#f9fafb" : "#fff";
+
+				doc.rect(40, rowY - 3, 515, 35).fill(bgColor);
+
+				doc
+					.fontSize(8)
+					.font("Helvetica")
+					.fillColor("#000")
+					.text(order.orderNumber, col1, rowY)
+					.text(order.customer.name, col2, rowY, { width: 120 })
+					.text(itemNames, col3, rowY, { width: 120 })
+					.text(`₹${order.totalAmount}`, col4, rowY);
+
+				if (order.customer.phone) {
+					doc
+						.fontSize(7)
+						.fillColor("#666")
+						.text(`Ph: ${order.customer.phone}`, col2, rowY + 12, {
+							width: 120,
+						});
+				}
+
+				rowY += 35;
+			});
+
+			pageNeedsBreak = true;
+		});
+
+		// Footer
+		doc
+			.fontSize(8)
+			.fillColor("#666")
+			.text(
+				"Generated by Catering Management System | " +
+					new Date().toLocaleString(),
+				{ align: "center", y: doc.page.height - 40 },
+			);
+
+		doc.end();
+	} catch (err) {
+		res.status(500).json({ message: err.message });
+	}
+});
+
+// GET order by ID
+router.get("/:id", async (req, res) => {
+	try {
+		const order = await Order.findById(req.params.id)
+			.populate("customer")
+			.populate("items.menuItem");
+		if (!order) return res.status(404).json({ message: "Order not found" });
+		res.json(order);
+	} catch (err) {
+		res.status(500).json({ message: err.message });
+	}
+});
+
+// POST create order
+router.post("/", async (req, res) => {
+	try {
+		const order = new Order(req.body);
+		const saved = await order.save();
+		res.status(201).json(saved);
+	} catch (err) {
+		res.status(400).json({ message: err.message });
+	}
+});
+
+// PUT update order (supports partial updates - used for payment updates)
+router.put("/:id", async (req, res) => {
+	try {
+		const updateData = { ...req.body };
+
+		// Normalise nested refs if populated objects were passed
+		if (updateData.customer && typeof updateData.customer === "object") {
+			updateData.customer = updateData.customer._id;
+		}
+		if (Array.isArray(updateData.items)) {
+			updateData.items = updateData.items.map((item) => ({
+				...item,
+				menuItem:
+					item.menuItem && typeof item.menuItem === "object"
+						? item.menuItem._id
+						: item.menuItem,
+			}));
+		}
+
+		// If marking as Paid, set balanceDue to 0
+		if (updateData.paymentStatus === "Paid") {
+			updateData.balanceDue = 0;
+		}
+
+		const order = await Order.findByIdAndUpdate(req.params.id, updateData, {
+			new: true,
+			runValidators: true,
+		}).populate("customer", "name phone");
+
+		if (!order) return res.status(404).json({ message: "Order not found" });
+		res.json(order);
+	} catch (err) {
+		res.status(400).json({ message: err.message });
+	}
+});
+
+// DELETE order
+router.delete("/:id", async (req, res) => {
+	try {
+		const order = await Order.findByIdAndDelete(req.params.id);
+		if (!order) return res.status(404).json({ message: "Order not found" });
+		res.json({ message: "Order deleted successfully" });
+	} catch (err) {
+		res.status(500).json({ message: err.message });
+	}
+});
+
+module.exports = router;

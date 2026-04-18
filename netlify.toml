@@ -1,0 +1,21 @@
+[build]
+  base      = "frontend"
+  publish   = "dist"
+  command   = "npm run build"
+
+[functions]
+  directory = "../netlify/functions"
+  node_bundler = "esbuild"
+  included_files = ["../backend/**"]
+
+# Redirect all /api/* calls to the serverless function
+[[redirects]]
+  from   = "/api/*"
+  to     = "/.netlify/functions/api/api/:splat"
+  status = 200
+
+# SPA fallback — send everything else to index.html
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
