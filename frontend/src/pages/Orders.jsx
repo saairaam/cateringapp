@@ -705,7 +705,7 @@ export default function Orders() {
 		}
 	};
 
-	const handleExportPDF = async () => {
+	const handleExportCSV = async () => {
 		try {
 			const response = await axios.get(
 				`/api/orders/export/pdf?date=${exportDate}`,
@@ -716,14 +716,14 @@ export default function Orders() {
 			const url = window.URL.createObjectURL(new Blob([response.data]));
 			const link = document.createElement("a");
 			link.href = url;
-			link.setAttribute("download", `Orders_${exportDate}.pdf`);
+			link.setAttribute("download", `Orders_${exportDate}.csv`);
 			document.body.appendChild(link);
 			link.click();
 			link.parentNode.removeChild(link);
 			window.URL.revokeObjectURL(url);
-			showMsg("PDF exported successfully!");
+			showMsg("CSV exported successfully!");
 		} catch (err) {
-			showMsg(err.response?.data?.message || "Error exporting PDF", "error");
+			showMsg(err.response?.data?.message || "Error exporting CSV", "error");
 		}
 	};
 
@@ -859,7 +859,7 @@ export default function Orders() {
 				<label
 					style={{ fontSize: "14px", fontWeight: "600", color: "#166534" }}
 				>
-					Export Orders as PDF:
+					Export Orders as CSV:
 				</label>
 				<input
 					type="date"
@@ -873,7 +873,7 @@ export default function Orders() {
 					}}
 				/>
 				<button
-					onClick={handleExportPDF}
+					onClick={handleExportCSV}
 					style={{
 						background: "#22c55e",
 						color: "white",
@@ -885,7 +885,7 @@ export default function Orders() {
 						fontWeight: "600",
 					}}
 				>
-					📥 Export to PDF
+					📥 Export to CSV
 				</button>
 			</div>
 
