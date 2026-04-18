@@ -5,7 +5,8 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-  included_files = ["backend/**"]
+  included_files = ["backend/**", "node_modules/pdfkit/**", "node_modules/stream-to-array/**", "node_modules/buffer-crc32/**"]
+  external_node_modules = ["pdfkit"]
 
 # Redirect all /api/* calls to the serverless function
 [[redirects]]
