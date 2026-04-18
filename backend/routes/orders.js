@@ -67,6 +67,7 @@ router.get("/export/pdf", async (req, res) => {
 			"Content-Disposition",
 			`attachment; filename="Orders_${selectedDate.toISOString().split("T")[0]}.pdf"`,
 		);
+		res.flushHeaders();
 
 		doc.pipe(res);
 

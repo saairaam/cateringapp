@@ -710,10 +710,11 @@ export default function Orders() {
 			const response = await axios.get(
 				`/api/orders/export/pdf?date=${exportDate}`,
 				{
-					responseType: "blob",
+					responseType: "arraybuffer",
 				},
 			);
-			const url = window.URL.createObjectURL(new Blob([response.data]));
+			const pdfBlob = new Blob([response.data], { type: "application/pdf" });
+			const url = window.URL.createObjectURL(pdfBlob);
 			const link = document.createElement("a");
 			link.href = url;
 			link.setAttribute("download", `Orders_${exportDate}.pdf`);
