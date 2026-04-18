@@ -73,11 +73,9 @@ router.get("/export/pdf", async (req, res) => {
 		// Title
 		doc
 			.fontSize(20)
-			.font("Helvetica-Bold")
 			.text("Catering Orders Report", { align: "center" });
 		doc
 			.fontSize(10)
-			.font("Helvetica")
 			.text(selectedDate.toDateString(), { align: "center" });
 		doc.moveDown(0.5);
 
@@ -112,7 +110,6 @@ router.get("/export/pdf", async (req, res) => {
 			// Meal type header
 			doc
 				.fontSize(14)
-				.font("Helvetica-Bold")
 				.fillColor("#ea580c")
 				.text(mealTypes[mealType]);
 			doc
@@ -128,7 +125,6 @@ router.get("/export/pdf", async (req, res) => {
 			const totalAmount = mealOrders.reduce((sum, o) => sum + o.totalAmount, 0);
 			doc
 				.fontSize(10)
-				.font("Helvetica")
 				.fillColor("#000")
 				.text(
 					`Total Orders: ${totalCount} | Total Amount: ₹${totalAmount.toLocaleString("en-IN")}`,
@@ -144,7 +140,6 @@ router.get("/export/pdf", async (req, res) => {
 
 			doc
 				.fontSize(9)
-				.font("Helvetica-Bold")
 				.fillColor("#fff")
 				.rect(40, tableTop, 515, 20)
 				.fill("#ea580c");
@@ -169,7 +164,6 @@ router.get("/export/pdf", async (req, res) => {
 
 				doc
 					.fontSize(8)
-					.font("Helvetica")
 					.fillColor("#000")
 					.text(order.orderNumber, col1, rowY)
 					.text(order.customer.name, col2, rowY, { width: 120 })
